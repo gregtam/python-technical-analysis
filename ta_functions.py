@@ -320,9 +320,11 @@ def run_simulation_df(security_data, start_cash_amt=10000,
                     # If ma_diff is positive on a crossover, then it is
                     # trending upwards since 50d ma is smaller than 15d
                     # ma
-                    if row['crossover_' + security] == 1:
+                    crossover_col_name = 'crossover_' + security
+                    ma_diff_col_name = 'ma_diff_' + security
+                    if row[crossover_col_name] == 1:
                         if security not in bought_securities\
-                                and row['ma_diff_' + security] > 0\
+                                and row[ma_diff_col_name] > 0\
                                 and sec_port.get_total_cash_amt() > purchase_price:
                             # Buy securities
                             sec_port.buy_max_securities(security, 
@@ -331,8 +333,9 @@ def run_simulation_df(security_data, start_cash_amt=10000,
                                                        )
                             bought_securities.add(security)
                             purchase_price = row[close_col_name]
+
                         elif security in bought_securities\
-                                and row['ma_diff_' + security] < 0\
+                                and row[ma_diff_col_name] < 0\
                                 and row[close_col_name] > purchase_price:
                             # Sell securities
                             sec_port.sell_all_securities(security, 
@@ -356,8 +359,8 @@ def run_simulation_df(security_data, start_cash_amt=10000,
                         bought_securities.add(security)
                         purchase_price = row[close_col_name]
                     elif security in bought_securities\
-                            and row[close_col_name] > row[high_col_name]\
-                            and row[close_col_name] > purchase_price:
+                            and row[close_col_name] > row[high_col_name]:
+                            # and row[close_col_name] > purchase_price:
                         # Sell securities
                         sec_port.sell_all_securities(security, 
                                                      row[close_col_name],
@@ -402,9 +405,11 @@ def run_simulation_df(security_data, start_cash_amt=10000,
         if 'transactions' in plot_options:
             for row in sec_port.get_all_transactions().itertuples():
                 if row.trans_type == 'Buy':
-                    plt.axvline(x=row.date, label='Buy', linestyle='--', c=red)
+                    plt.axvline(x=row.date, label='Buy', linewidth=2.5,
+                                linestyle='--', c=red)
                 elif row.trans_type == 'Sell':
-                    plt.axvline(x=row.date, label='Sell', linestyle='--', c=green)
+                    plt.axvline(x=row.date, label='Sell', linewidth=2.5,
+                                linestyle='--', c=green)
 
     _run_simulation()
     _plot_simulation()
