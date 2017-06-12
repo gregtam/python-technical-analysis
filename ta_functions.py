@@ -309,7 +309,7 @@ def run_simulation_df(security_data, start_cash_amt=10000,
     bought_securities = set()
 
     def _run_simulation():
-        """Run simulation."""
+        """Runs through the simulation."""
         purchase_price = 0
 
         # For each day
@@ -399,23 +399,12 @@ def run_simulation_df(security_data, start_cash_amt=10000,
                     plt.plot(security_data.index, security_data[low_col_name],
                              c=black, linestyle='--', alpha=0.5)
 
-                if 'transactions' in plot_options:
-                    # Get rows where crossovers are
-                    crossover_col_name = 'crossover_' + security
-
-                    if crossover_col_name in security_data:
-                        crossover_df = security_data\
-                            .query('{} == 1'.format(crossover_col_name))
-                        crossover_dates = crossover_df.index
-
-                        # Plot buy and sell signals
-                        for index, row in crossover_df.iterrows():
-                            if row['signal_' + security] == 'Buy':
-                                plt.axvline(x=index, label='Buy', linestyle='--',
-                                            c=red)
-                            elif row['signal_' + security] == 'Sell':
-                                plt.axvline(x=index, label='Sell', linestyle='--',
-                                            c=green)
+        if 'transactions' in plot_options:
+            for row in sec_port.get_all_transactions().itertuples():
+                if row.trans_type == 'Buy':
+                    plt.axvline(x=row.date, label='Buy', linestyle='--', c=red)
+                elif row.trans_type == 'Sell':
+                    plt.axvline(x=row.date, label='Sell', linestyle='--', c=green)
 
     _run_simulation()
     _plot_simulation()
