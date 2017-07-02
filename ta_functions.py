@@ -265,64 +265,88 @@ def run_simulation_df(security_data, start_cash_amt=10000,
 
     bought_securities = set()
 
+    def _get_ma_crossovers_price(index, row, security, purchase_price):
+        """Checks for MA crossovers, executes transaction if satisfies
+        criteria, and updates purchase_price."""
+        close_col_name = 'close_' + security
+        ma_diff_col_name = 'ma_diff_' + security
+
+        # If ma_diff is positive on a crossover, then it is trending
+        # upwards since 50d ma is smaller than 15d ma
+        if security not in bought_securities\
+                and row[ma_diff_col_name] > 0\
+                and sec_port.get_total_cash_amt() > purchase_price:
+            # Buy securities
+            sec_port.buy_max_securities(security, 
+                                        row[close_col_name], 
+                                        index 
+                                       )
+            bought_securities.add(security)
+            purchase_price = row[close_col_name]
+        elif security in bought_securities\
+                and row[ma_diff_col_name] < 0\
+                and row[close_col_name] > purchase_price:
+            # Sell securities
+            sec_port.sell_all_securities(security, 
+                                         row[close_col_name],
+                                         index
+                                        )
+            bought_securities.remove(security)
+
+        return purchase_price
+
+    def _get_bollinger_price(index, row, security, purchase_price):
+        """Checks for bollinger criteria, executes transaction if
+        passes, and updates purchase_price."""
+        close_col_name = 'close_' + security
+        high_col_name = 'close_{}_bollinger_high'.format(security)
+        low_col_name = 'close_{}_bollinger_low'.format(security)
+
+        if security not in bought_securities\
+                and row[close_col_name] < row[low_col_name]\
+                and sec_port.get_total_cash_amt() > purchase_price:
+            # Buy securities
+            sec_port.buy_max_securities(security,
+                                        row[close_col_name],
+                                        index
+                                       )
+            bought_securities.add(security)
+            purchase_price = row[close_col_name]
+        elif security in bought_securities\
+                and row[close_col_name] > row[high_col_name]:
+                # and row[close_col_name] > purchase_price:
+            # Sell securities
+            sec_port.sell_all_securities(security, 
+                                         row[close_col_name],
+                                         index
+                                        )
+            bought_securities.remove(security)
+
+        return purchase_price
+
     def _run_simulation():
         """Runs through the simulation."""
-        purchase_price = 0
 
+        purchase_price = 0
         # For each day
         for index, row in security_data.iterrows():
             for security in securities:
-                close_col_name = 'close_' + security
                 crossover_col_name = 'crossover_' + security
-                ma_diff_col_name = 'ma_diff_' + security
                 if 'ma_crossovers' in indicators\
                         and row[crossover_col_name] == 1:
-                    # If ma_diff is positive on a crossover, then it is
-                    # trending upwards since 50d ma is smaller than 15d
-                    # ma
-                    if security not in bought_securities\
-                            and row[ma_diff_col_name] > 0\
-                            and sec_port.get_total_cash_amt() > purchase_price:
-                        # Buy securities
-                        sec_port.buy_max_securities(security, 
-                                                    row[close_col_name], 
-                                                    index 
-                                                   )
-                        bought_securities.add(security)
-                        purchase_price = row[close_col_name]
-                    elif security in bought_securities\
-                            and row[ma_diff_col_name] < 0\
-                            and row[close_col_name] > purchase_price:
-                        # Sell securities
-                        sec_port.sell_all_securities(security, 
-                                                     row[close_col_name],
-                                                     index
-                                                    )
-                        bought_securities.remove(security)
+                    purchase_price = _get_ma_crossovers_price(index,
+                                                              row,
+                                                              security,
+                                                              purchase_price
+                                                             )
+
                 if 'bollinger_len' in indicators\
                        and 'bollinger_std' in indicators:
-                    high_col_name = 'close_{}_bollinger_high'.format(security)
-                    low_col_name = 'close_{}_bollinger_low'.format(security)
-
-                    if security not in bought_securities\
-                            and row[close_col_name] < row[low_col_name]\
-                            and sec_port.get_total_cash_amt() > purchase_price:
-                        # Buy securities
-                        sec_port.buy_max_securities(security,
-                                                    row[close_col_name],
-                                                    index
-                                                   )
-                        bought_securities.add(security)
-                        purchase_price = row[close_col_name]
-                    elif security in bought_securities\
-                            and row[close_col_name] > row[high_col_name]:
-                            # and row[close_col_name] > purchase_price:
-                        # Sell securities
-                        sec_port.sell_all_securities(security, 
-                                                     row[close_col_name],
-                                                     index
-                                                    )
-                        bought_securities.remove(security)
+                    purchase_price = _get_bollinger_price(index,
+                                                          row,
+                                                          security,
+                                                          purchase_price
+                                                         )
 
     def _plot_simulation():
         """Plot the security and relevant simulation information."""
