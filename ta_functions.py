@@ -583,6 +583,9 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
             if show_plot:
                 _plot_signals(sell_df, 'Sell', green)
 
+    signal_df.columns = [i.replace('_' + security, '')
+                             for i in signal_df.columns]
+    signal_df.insert(0, 'security', security.upper())
     return signal_df.sort_index().drop_duplicates()
 
 def plot_trades(sec_port):
