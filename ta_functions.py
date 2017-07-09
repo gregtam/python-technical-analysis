@@ -450,12 +450,11 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     """
 
     def _plot_security():
-        if show_plot:
-            if 'ax' in kwargs:
-                ax = kwargs['ax']
-                ax.plot(security_df.index, security_df[desired_column], c=black)
-            else:
-                plt.plot(security_df.index, security_df[desired_column], c=black)
+        if 'ax' in kwargs:
+            ax = kwargs['ax']
+            ax.plot(security_df.index, security_df[desired_column], c=black)
+        else:
+            plt.plot(security_df.index, security_df[desired_column], c=black)
 
     def _plot_bollinger_bands(security_df):
         security_df = generate_bollinger_columns(security_df,
@@ -534,7 +533,8 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
                                                    )
 
 
-    _plot_security()
+    if show_plot:
+        _plot_security()
 
     if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
         bollinger_len = indicators['bollinger_len']
@@ -548,45 +548,48 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     signal_df = pd.DataFrame()
     # Plot buy signals
     # TODO: Clean up this part
-    if 'buy' in signals:
+    if 'buy' in signals and security_df.shape[0] > 0:
         if 'ma_crossovers' in indicators:
-            buy_cond = "crossover_signal_{} == 'Buy'".format(security)
-            buy_df = security_df.query(buy_cond).copy()
+            buy_col = 'crossover_signal_{}'.format(security)
+            buy_df = security_df[security_df[buy_col] == 'Buy'].copy()
             signal_df = pd.concat([signal_df, buy_df])
 
             if show_plot:
                 _plot_signals(buy_df, 'Buy', red)
 
         if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
-            buy_cond = "bollinger_signal_{} == 'Buy'".format(security)
-            buy_df = security_df.query(buy_cond).copy()
+            buy_col = 'bollinger_signal_{}'.format(security)
+            buy_df = security_df[security_df[buy_col] == 'Buy'].copy()
             signal_df = pd.concat([signal_df, buy_df])
 
             if show_plot:
                 _plot_signals(buy_df, 'Buy', red)
 
     # Plot sell signals
-    if 'sell' in signals:
+    if 'sell' in signals and security_df.shape[0] > 0:
         if 'ma_crossovers' in indicators:
-            sell_cond = "crossover_signal_{} == 'Sell'".format(security)
-            sell_df = security_df.query(sell_cond).copy()
+            sell_col = 'crossover_signal_{}'.format(security)
+            sell_df = security_df[security_df[sell_col] == 'Sell'].copy()
             signal_df = pd.concat([signal_df, sell_df])
 
             if show_plot:
                 _plot_signals(sell_df, 'Sell', green)
 
         if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
-            sell_cond = "bollinger_signal_{} == 'Sell'".format(security)
-            sell_df = security_df.query(sell_cond).copy()
+            sell_col = 'bollinger_signal_{}'.format(security)
+            sell_df = security_df[security_df[sell_col] == 'Sell'].copy()
             signal_df = pd.concat([signal_df, sell_df])
 
             if show_plot:
                 _plot_signals(sell_df, 'Sell', green)
 
-    signal_df.columns = [i.replace('_' + security, '')
-                             for i in signal_df.columns]
-    signal_df.insert(0, 'security', security.upper())
-    return signal_df.sort_index().drop_duplicates()
+    if signal_df.shape[0] > 0:
+        signal_df.columns = [i.replace('_' + security, '')
+                                 for i in signal_df.columns]
+        signal_df.insert(0, 'security', security.upper())
+        return signal_df.sort_index().drop_duplicates()
+    else:
+        return None
 
 def plot_trades(sec_port):
     """Plots the trades."""
