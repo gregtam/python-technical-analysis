@@ -180,9 +180,12 @@ def get_security_data(securities, start_date, end_date=date.today(),
 
     securities = _listify_security(securities)
 
-    df_list = [data.DataReader(security, data_source=data_source,
-                               start=start_date, end=end_date)
-                   for security in securities]
+    try:
+        df_list = [data.DataReader(security, data_source=data_source,
+                                   start=start_date, end=end_date)
+                       for security in securities]
+    except:
+        return pd.DataFrame()
 
     # Append security name to columns
     for security, df in izip(securities, df_list):
@@ -436,9 +439,11 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     show_plot - A boolean of whether to plot the security and signals
                (Default: True)
     data_source - The data source to pull data from (Default: 'google')
-    indicators - A dictionary of which indicators to plot, where the keys
-                 are strings representing the indicators and the values
-                 indicate the parameters associated with the indicators
+    indicators - A dictionary of which indicators to plot, where the
+                 keys are strings representing the indicators and the
+                 values indicate the parameters associated with the
+                 indicators.
+
                  Possible keys: 'ma_crossovers', 'rsi', 'bollinger_std',
                  and 'bollinger_len'
                  (Default: {})
@@ -455,6 +460,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
             ax.plot(security_df.index, security_df[desired_column], c=black)
         else:
             plt.plot(security_df.index, security_df[desired_column], c=black)
+        plt.tight_layout()
 
     def _plot_bollinger_bands(security_df):
         security_df = generate_bollinger_columns(security_df,
@@ -523,15 +529,21 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     bollinger_high_col = '{}_{}_bollinger_high'.format(col_name, security)
     bollinger_low_col = '{}_{}_bollinger_low'.format(col_name, security)
 
-    if data_store is None or security.upper() not in data_store.data_store_dict:
-        security_df = get_security_data(security, start_date, end_date,
-                                        data_source=data_source)
+    if data_store is None:
+        security_df = get_security_data(security.upper(), start_date, end_date,
+                                        data_source=data_source
+                                       )        
+    elif security.upper() not in data_store.data_store_dict:
+        security_df = data_store.get_security_data(security.upper(),
+                                                   start_date,
+                                                   end_date,
+                                                   data_source=data_source
+                                                  )
     else:
         security_df = data_store.load_security_data(security.upper(),
                                                     start_date,
                                                     end_date
                                                    )
-
 
     if show_plot:
         _plot_security()
@@ -663,15 +675,17 @@ class data_storage:
     def get_security_data(self, security, start_date,
                           end_date=date.today(), data_source='google',
                           return_df=True):
+        """Obtains security data and stores it into dictionary."""
         security_df = get_security_data(security, start_date, end_date,
-                                   data_source)
+                                        data_source)
         self.data_store_dict[security] = security_df
         if return_df: 
             return security_df
 
     def load_security_data(self, security, start_date=None, end_date=None):
+        """Loads the security data if it is in the dictionary."""
         if security not in self.data_store_dict:
-            raise ValueError('security not in data dictionary.')
+            raise KeyError('security not in data dictionary.')
         security_df = self.data_store_dict[security].copy()
 
         if start_date is None and end_date is None: 
