@@ -33,6 +33,17 @@ def _get_security_names(security_df):
     _col_values = [word.split('_')[-1] for word in security_df.columns]
     return set(_col_values)
 
+def _trim_security_name(sec_string, sec_name):
+    """Trims the security name from the end of the string with an
+    underscore ahead of it."""
+    last_index = sec_string.rfind('_' + sec_name)
+    
+    # Determines whether sec_name is truly at the end of the string
+    # Adds 1 to take into account the '_'
+    if last_index + len(sec_name) + 1 == len(sec_string):
+        return sec_string[:last_index]
+    return sec_string
+
 def generate_bollinger_columns(security_df, securities, col_name,
                                bollinger_std, bollinger_len):
     """Creates columns for Bollinger bands and buy signals.
@@ -57,8 +68,8 @@ def generate_bollinger_columns(security_df, securities, col_name,
         input_col = col_name + '_' + security
 
         # Set column names for bollinger bands
-        bollinger_high = '{}_{}_bollinger_high'.format(col_name, security)
-        bollinger_low = '{}_{}_bollinger_low'.format(col_name, security)
+        bollinger_high = '{}_bollinger_high_{}'.format(col_name, security)
+        bollinger_low = '{}_bollinger_low_{}'.format(col_name, security)
 
         # Get rolling mean and standard deviation
         rolling_window = security_df[input_col].rolling(bollinger_len)
@@ -108,11 +119,11 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
 
         # Create moving average columns
         for n in ndays:
-            final_col = '{}_{}_{}d_ma'.format(col_name, security, n)
+            final_col = '{}_{}d_ma_{}'.format(col_name, n, security)
             security_df[final_col] = security_df[input_col].rolling(n).mean()
 
-        short_ma = security_df['{}_{}_{}d_ma'.format(col_name, security, ndays[0])]
-        long_ma = security_df['{}_{}_{}d_ma'.format(col_name, security, ndays[1])]
+        short_ma = security_df['{}_{}d_ma_{}'.format(col_name, ndays[0], security)]
+        long_ma = security_df['{}_{}d_ma_{}'.format(col_name, ndays[1], security)]
 
         ma_diff_col_name = 'ma_diff_' + security
         security_df[ma_diff_col_name] = short_ma - long_ma
@@ -185,7 +196,9 @@ def get_security_data(securities, start_date, end_date=date.today(),
                                    start=start_date, end=end_date)
                        for security in securities]
     except:
-        return pd.DataFrame()
+        columns = ['open', 'high', 'low', 'close', 'volume']
+        columns = [s + '_' + security.lower() for s in columns]
+        return pd.DataFrame(columns=columns)
 
     # Append security name to columns
     for security, df in izip(securities, df_list):
@@ -490,11 +503,12 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
         ndays = indicators['ma_crossovers']
         security_df = generate_ma_columns(security_df, security, col_name,
                                           ndays=ndays)
+
         if show_plot:
             for colour, nday in izip(blues, ndays):
-                ma_crossover_col = '{}_{}_{}d_ma'.format(col_name,
-                                                         security,
-                                                         nday
+                ma_crossover_col = '{}_{}d_ma_{}'.format(col_name,
+                                                         nday,
+                                                         security
                                                         )
                 if 'ax' in kwargs:
                     ax = kwargs['ax']
@@ -526,8 +540,8 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     security = security.lower()
     col_name = col_name.lower()
     desired_column = col_name + '_' + security
-    bollinger_high_col = '{}_{}_bollinger_high'.format(col_name, security)
-    bollinger_low_col = '{}_{}_bollinger_low'.format(col_name, security)
+    bollinger_high_col = '{}_bollinger_high_{}'.format(col_name, security)
+    bollinger_low_col = '{}_bollinger_low_{}'.format(col_name, security)
 
     if data_store is None:
         security_df = get_security_data(security.upper(), start_date, end_date,
@@ -596,8 +610,10 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
                 _plot_signals(sell_df, 'Sell', green)
 
     if signal_df.shape[0] > 0:
-        signal_df.columns = [i.replace('_' + security, '')
-                                 for i in signal_df.columns]
+        # Remove ticker symbols from column names
+        signal_df.columns = [_trim_security_name(s, security)
+                                 for s in signal_df.columns]
+        # Insert column for ticker symbols
         signal_df.insert(0, 'security', security.upper())
         return signal_df.sort_index().drop_duplicates()
     else:
@@ -691,12 +707,11 @@ class data_storage:
         if start_date is None and end_date is None: 
             return security_df
         elif start_date is None and end_date is not None:
-            return security_df.query("index <= '{}'".format(end_date))
+            return security_df.query('index <= @end_date')
         elif start_date is not None and end_date is None:
-            return security_df.query("index >= '{}'".format(start_date))
+            return security_df.query('index >= @start_date')
         else:
-            return security_df.query("index >= '{}' & index <= '{}'"
-                                    .format(start_date, end_date))
+            return security_df.query('index >= @start_date & index <= @end_date')
 
 class security_portfolio:
     def __init__(self, total_cash_amt, verbose=False):
@@ -731,7 +746,8 @@ class security_portfolio:
             
             if self.verbose:
                 print 'Bought {} shares of {} at {}.\n\tStart cash: {}.\n\tRemaining cash: {}.\n\tDate: {}'\
-                      .format(amount, ticker_symbol, security_price, start_cash_amt, self.total_cash_amt, trans_date)
+                      .format(amount, ticker_symbol, security_price,
+                              start_cash_amt, self.total_cash_amt, trans_date)
         else:
             raise Exception('You do not own enough cash to purchase this many securities.')
         
