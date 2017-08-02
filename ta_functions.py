@@ -176,7 +176,7 @@ def generate_returns(security_df, col_name):
     sec_returns = ((df_col - df_last_col)/df_last_col)
     return sec_returns
 
-def get_security_data(securities, start_date, end_date=date.today(),
+def get_security_data(securities, start_date, end_date=None,
                       data_source='google'):
     """Gets all securities in securities and merges them into a
     DataFrame.
@@ -184,12 +184,16 @@ def get_security_data(securities, start_date, end_date=date.today(),
     Inputs:
     securities - A string indicating the desired security or a list of
                     strings indicating the desired securities
-    end_date - A string indicating the end date of our data
-               (Default: date.today())
+    end_date - A string indicating the end date of our data. If set to
+               None, then end_date will be set as date.today()
+               (Default: None)
     data_source - The source of the security data (Default: 'google')
     """
 
     securities = _listify_security(securities)
+
+    if end_date is None:
+        end_date = date.today()
 
     try:
         df_list = [data.DataReader(security, data_source=data_source,
@@ -211,7 +215,7 @@ def get_security_data(securities, start_date, end_date=date.today(),
 
     return merged_df
 
-def run_simulation(securities, col_name, start_date, end_date=date.today(),
+def run_simulation(securities, col_name, start_date, end_date=None,
                    data_source='google', data_store=None, **simulation_args):
     """Run a trading simulation for a list of securities. This is a
     wrapper around run_simulation_df(). Its purpose is to load the data,
@@ -224,8 +228,9 @@ def run_simulation(securities, col_name, start_date, end_date=date.today(),
                  already merged data.
     col_name - Close, Open, etc.
     start_date - A string indicating the start date of our data
-    end_date - A string indicating the end date of our data
-               (Default: date.today())
+    end_date - A string indicating the end date of our data. If set to
+               None, then end_date will be set as date.today()
+               (Default: None)
     start_cash_amt - Starting portfolio cash amount (Default: 10000)
     data_source - The source of the security data (Default: 'google')
     data_store - A data_storage object to hold the security data. If not 
@@ -235,6 +240,9 @@ def run_simulation(securities, col_name, start_date, end_date=date.today(),
     """
 
     securities = _listify_security(securities)
+
+    if end_date is None:
+        end_date = date.today()
 
     if data_store is None:
         # Pull security data from online
@@ -439,7 +447,7 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
     _plot_simulation()
     return sec_port
 
-def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
+def get_buy_sell_signals(security, col_name, start_date, end_date=None,
                          show_plot=True, data_source='google', indicators={},
                          signals=[], data_store=None, **kwargs):
     """Gets buy and sell signals given indicators and plots them.
@@ -448,7 +456,9 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
     security - The ticker symbol
     col_name - Open, Close, etc.
     start_date - A string representing the start date
-    end_date - A string representing the end date (Default: today)
+    end_date - A string indicating the end date of our data. If set to
+               None, then end_date will be set as date.today()
+               (Default: None)
     show_plot - A boolean of whether to plot the security and signals
                (Default: True)
     data_source - The data source to pull data from (Default: 'google')
@@ -537,27 +547,38 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=date.today(),
                 plt.axvline(x=row.Index, label=type_, c=colour,
                             linestyle='--', linewidth=2.5)
 
+    def _get_security_df(security, start_date, end_date, data_store):
+        if data_store is None:
+            # If no data store is specified, use get_security_data
+            return get_security_data(security.upper(),
+                                     start_date,
+                                     end_date,
+                                     data_source=data_source
+                                    )
+        elif security.upper() not in data_store.data_store_dict:
+            # If a data store is specified, use that to get security data
+            return data_store.get_security_data(security.upper(),
+                                                start_date,
+                                                end_date,
+                                                data_source=data_source
+                                               )
+        else:
+            # If the security is in the data store, load it from there
+            return data_store.load_security_data(security.upper(),
+                                                 start_date,
+                                                 end_date
+                                                )
+
+    if end_date is None:
+        end_date = date.today()
+
     security = security.lower()
     col_name = col_name.lower()
     desired_column = col_name + '_' + security
     bollinger_high_col = '{}_bollinger_high_{}'.format(col_name, security)
     bollinger_low_col = '{}_bollinger_low_{}'.format(col_name, security)
 
-    if data_store is None:
-        security_df = get_security_data(security.upper(), start_date, end_date,
-                                        data_source=data_source
-                                       )        
-    elif security.upper() not in data_store.data_store_dict:
-        security_df = data_store.get_security_data(security.upper(),
-                                                   start_date,
-                                                   end_date,
-                                                   data_source=data_source
-                                                  )
-    else:
-        security_df = data_store.load_security_data(security.upper(),
-                                                    start_date,
-                                                    end_date
-                                                   )
+    security_df = _get_security_df(security, start_date, end_date, data_store)
 
     if show_plot:
         _plot_security()
@@ -629,7 +650,7 @@ def plot_trades(sec_port):
         elif row.trans_type == 'Sell':
             plt.axvline(row.date, linestyle='--', linewidth=3, color=green)
 
-def plot_rsi(security, col_name, start_date, end_date=date.today(), ndays=14,
+def plot_rsi(security, col_name, start_date, end_date=None, ndays=14,
              thresholds=[20, 80], **kwargs):
     """Plots a single security.
 
@@ -637,8 +658,11 @@ def plot_rsi(security, col_name, start_date, end_date=date.today(), ndays=14,
     security - The ticker symbols
     col_name - Open, Close, etc.
     start_date - A string representing the start date
-    end_date - A string representing the end date (Default: today)
+    end_date - A string indicating the end date of our data. If set to
+               None, then end_date will be set as date.today()
+               (Default: None)
     ndays - The number of days to use as a lookback period (Default: 14)
+    thresholds - The RSI thresholds (Default: [20, 80])
     """
 
     def _rsi_agg(security_array):
@@ -664,6 +688,9 @@ def plot_rsi(security, col_name, start_date, end_date=date.today(), ndays=14,
             rsi = 100 - 100/(1 + float(pos_mean)/float(neg_mean))
         return rsi
 
+    if end_date is None:
+        end_date = date.today()
+
     security = security.lower()
     col_name = col_name.lower()
     desired_column = col_name + '_' + security
@@ -688,10 +715,12 @@ class data_storage:
     def __init__(self):
         self.data_store_dict = {}
 
-    def get_security_data(self, security, start_date,
-                          end_date=date.today(), data_source='google',
-                          return_df=True):
+    def get_security_data(self, security, start_date, end_date=None,
+                          data_source='google', return_df=True):
         """Obtains security data and stores it into dictionary."""
+        if end_date is None:
+            end_date = date.today()
+        
         security_df = get_security_data(security, start_date, end_date,
                                         data_source)
         self.data_store_dict[security] = security_df
