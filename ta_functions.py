@@ -15,6 +15,7 @@ black = (0, 0, 0)
 white = (1, 1, 1)
 blues = sns.color_palette('Blues', n_colors=6)[::-1]
 
+
 def _listify_security(securities):
     """If input is a string, convert it to a list. If the input is a
     list, keep it the same.
@@ -27,15 +28,17 @@ def _listify_security(securities):
             or isinstance(securities, set):
         return securities
 
+
 def _get_security_names(security_df):
     """Extracts the security names from the merged DataFrame."""
-
     _col_values = [word.split('_')[-1] for word in security_df.columns]
     return set(_col_values)
+
 
 def _trim_security_name(sec_string, sec_name):
     """Trims the security name from the end of the string with an
     underscore ahead of it."""
+
     last_index = sec_string.rfind('_' + sec_name)
     
     # Determines whether sec_name is truly at the end of the string
@@ -44,18 +47,27 @@ def _trim_security_name(sec_string, sec_name):
         return sec_string[:last_index]
     return sec_string
 
+
 def generate_bollinger_columns(security_df, securities, col_name,
                                bollinger_std, bollinger_len):
     """Creates columns for Bollinger bands and buy signals.
 
-    Inputs:
-    security_df - The merged DataFrame of security data
-    securities - The corresponding list of securities, ETFs, etc.
-    col_name - Close, Open, etc.
-    bollinger_std - The standard deviation of the Bollinger bands
-    bollinger_len - The number of days to use for the moving average
+    Parameters
+    ----------
+    security_df : DataFrame
+        The merged DataFrame of security data
+    securities : list
+        The corresponding list of securities, ETFs, etc.
+    col_name : str
+        Close, Open, etc.
+    bollinger_std : float
+        The standard deviation of the Bollinger bands
+    bollinger_len : int
+        The number of days to use for the moving average
 
-    Returns a Pandas DataFrame with the new Bollinger columns
+    Returns
+    -------
+    A Pandas DataFrame with the new Bollinger columns
     """
 
     security_df = security_df.copy()
@@ -92,17 +104,25 @@ def generate_bollinger_columns(security_df, securities, col_name,
 
     return security_df.dropna()
 
+
 def generate_ma_columns(security_df, securities, col_name, ndays):
     """Create columns for moving averages and determines when there are
     crossovers.
 
-    Inputs:
-    security_df - The merged DataFrame of security data
-    securities - The corresponding list of securities, ETFs, etc.
-    col_name - Close, Open, etc.
-    ndays - A list of the moving average lengths we want to generate
+    Parameters
+    ----------
+    security_df : DataFrame
+        The merged DataFrame of security data
+    securities : list
+        The corresponding list of securities, ETFs, etc.
+    col_name : str
+        Close, Open, etc.
+    ndays : list of int
+        A list of the moving average lengths we want to generate
 
-    Returns a Pandas DataFrame with the new MA columns
+    Returns
+    -------
+    A Pandas DataFrame with the new MA columns
     """
 
     security_df = security_df.copy()
@@ -122,8 +142,10 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
             final_col = '{}_{}d_ma_{}'.format(col_name, n, security)
             security_df[final_col] = security_df[input_col].rolling(n).mean()
 
-        short_ma = security_df['{}_{}d_ma_{}'.format(col_name, ndays[0], security)]
-        long_ma = security_df['{}_{}d_ma_{}'.format(col_name, ndays[1], security)]
+        short_ma_col = '{}_{}d_ma_{}'.format(col_name, ndays[0], security)
+        long_ma_col = '{}_{}d_ma_{}'.format(col_name, ndays[1], security)
+        short_ma = security_df[short_ma_col]
+        long_ma = security_df[long_ma_col]
 
         ma_diff_col_name = 'ma_diff_' + security
         security_df[ma_diff_col_name] = short_ma - long_ma
@@ -133,17 +155,19 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
         # Account for missing entry
         crossover = [0] + crossover.tolist()
 
-        crossover_col_name = 'crossover_' + security
+        crossover_col_name = 'crossover_{}'.format(security)
         security_df[crossover_col_name] = np.sign(crossover)
         # Equal to 1 if crossed over from previous day to current day,
         # i.e., the signs of ma_diff switches
-        security_df[crossover_col_name] = security_df[crossover_col_name].map({1:0, 0:0, -1:1})
+        security_df[crossover_col_name] = security_df[crossover_col_name]\
+            .map({1:0, 0:0, -1:1})
 
         # Make a new variable signal_SECURITY which determines, based
         # off the moving average, whether to buy, sell or do nothing. We
         # buy when short_ma is larger than long_ma
-        signal_col_name = 'crossover_signal_' + security
-        security_df[signal_col_name] = (short_ma > long_ma).map({True: 'Buy', False: 'Sell'})
+        signal_col_name = 'crossover_signal_{}'.format(security)
+        security_df[signal_col_name] = (short_ma > long_ma)\
+            .map({True: 'Buy', False: 'Sell'})
 
         # Next, we only do this when a crossover has occurred, so we
         # need to remove pre-existing signals
@@ -151,15 +175,18 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
     
     return security_df.dropna()
 
+
 def generate_returns(security_df, col_name):
     """Generates the returns of a given security.
 
-    Inputs:
-    security_df - A Pandas DataFrame with the security information.
-    col_name - The column name to generate returns for
+    Parameters
+    ----------
+    security_df : A Pandas DataFrame with the security information.
+    col_name : The column name to generate returns for
 
-    Returns:
-    sec_returns - A Pandas Series of the returns of the given column
+    Returns
+    -------
+    sec_returns : A Pandas Series of the returns of the given column
     """
 
     # Get the first security name
@@ -181,13 +208,16 @@ def get_security_data(securities, start_date, end_date=None,
     """Gets all securities in securities and merges them into a
     DataFrame.
 
-    Inputs:
-    securities - A string indicating the desired security or a list of
-                    strings indicating the desired securities
-    end_date - A string indicating the end date of our data. If set to
-               None, then end_date will be set as date.today()
-               (Default: None)
-    data_source - The source of the security data (Default: 'google')
+    Parameters
+    ----------
+    securities : str or list of str
+        A string indicating the desired security or a list of strings
+        indicating the desired securities
+    end_date : str, default None
+        A string indicating the end date of our data. If set to None,
+        then end_date will be set as date.today()
+    data_source : str, default 'google'
+        The source of the security data
     """
 
     securities = _listify_security(securities)
@@ -215,6 +245,7 @@ def get_security_data(securities, start_date, end_date=None,
 
     return merged_df
 
+
 def run_simulation(securities, col_name, start_date, end_date=None,
                    data_source='google', data_store=None, **simulation_args):
     """Run a trading simulation for a list of securities. This is a
@@ -222,21 +253,26 @@ def run_simulation(securities, col_name, start_date, end_date=None,
     then run run_simulation_df() on it, so we do not need to load the
     data into a DataFrame ahead of time.
 
-    Inputs:
-    securities - A string representing a single security, a list of 
-                 securities, ETFs, etc., or a DataFrame containing the 
-                 already merged data.
-    col_name - Close, Open, etc.
-    start_date - A string indicating the start date of our data
-    end_date - A string indicating the end date of our data. If set to
-               None, then end_date will be set as date.today()
-               (Default: None)
-    start_cash_amt - Starting portfolio cash amount (Default: 10000)
-    data_source - The source of the security data (Default: 'google')
-    data_store - A data_storage object to hold the security data. If not 
-                 specified, then download data each time.
-                 (Default: None)
-    simulation_args - Remaining keyword arguments
+    Parameters
+    ----------
+    securities : str
+        A string representing a single security, a list of securities,
+        ETFs, etc., or a DataFrame containing the already merged data.
+    col_name : str
+        Close, Open, etc.
+    start_date : str
+        A string indicating the start date of our data
+    end_date : str, default None
+         A string indicating the end date of our data. If set to None,
+         then end_date will be set as date.today()
+    start_cash_amt : int, default 10000
+        Starting portfolio cash amount
+    data_source : str, default 'google'
+        The source of the security data
+    data_store : data_storage object, default None
+         A data_storage object to hold the security data. If not
+        specified, then download data each time.
+    simulation_args : Remaining keyword arguments
     """
 
     securities = _listify_security(securities)
@@ -283,24 +319,33 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
     security data information. This is designed to run on the output
     DataFrame of the get_security_data function.
 
-    Inputs:
-    security_data - A Pandas DataFrame with the relevant stock data
-    col_name - Close, Open, etc.
-    start_cash_amt - Starting portfolio cash amount (Default: 10000)
-    indicators - A dictionary of which indicators to use, where the keys
-                 are strings representing the indicators and the values
-                 indicate the parameters associated with the indicators
-                 Possible keys: 'ma_crossovers', 'rsi', 'bollinger_std',
-                 and 'bollinger_len'.
-                 (Default: {'ma_crossovers': [5, 10]})
-    verbose - A boolean of whether to print each trade (Default: True)
-    plot_options - A set of which plotting options.
-                   Possible options: ('transactions', 'ma')
+    Parameters
+    ----------
+    security_data : DataFrame
+        A Pandas DataFrame with the relevant stock data
+    col_name : str
+        Close, Open, etc.
+    start_cash_amt : int, default 10000
+        Starting portfolio cash amount
+    indicators : dict, default {'ma_crossovers': [5, 10]}
+        a dictionary of which indicators to use, where the keys are
+        strings representing the indicators and the values indicate the
+        parameters associated with the indicators
+        
+        possible keys: 'ma_crossovers', 'rsi', 'bollinger_std', and
+                        'bollinger_len'
+    verbose : bool, default True
+        A boolean of whether to print each trade (Default: True)
+    plot_options : set
+        A set of which plotting options. This option can take more than
+        one option
+        Possible options: 'transactions', 'ma'
     """
 
     def _get_ma_crossovers_price(index, row, security, purchase_price):
         """Checks for MA crossovers, executes transaction if satisfies
         criteria, and updates purchase_price."""
+
         close_col_name = 'close_' + security
         ma_diff_col_name = 'ma_diff_' + security
 
@@ -331,7 +376,8 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
     def _get_bollinger_price(index, row, security, purchase_price):
         """Checks for bollinger criteria, executes transaction if
         passes, and updates purchase_price."""
-        close_col_name = 'close_' + security
+
+        close_col_name = 'close_{}'.format(security)
         high_col_name = 'close_{}_bollinger_high'.format(security)
         low_col_name = 'close_{}_bollinger_low'.format(security)
 
@@ -359,7 +405,6 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
 
     def _run_simulation():
         """Runs through the simulation."""
-
         purchase_price = 0
         # For each day
         for index, row in security_data.iterrows():
@@ -447,34 +492,41 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
     _plot_simulation()
     return sec_port
 
+
 def get_buy_sell_signals(security, col_name, start_date, end_date=None,
-                         show_plot=True, data_source='google', indicators={},
+                         show_plot=True, data_source='google',
+                         indicators={'ma_crossovers': [5, 10]},
                          signals=[], data_store=None, **kwargs):
     """Gets buy and sell signals given indicators and plots them.
 
-    Inputs:
-    security - The ticker symbol
-    col_name - Open, Close, etc.
-    start_date - A string representing the start date
-    end_date - A string indicating the end date of our data. If set to
-               None, then end_date will be set as date.today()
-               (Default: None)
-    show_plot - A boolean of whether to plot the security and signals
-               (Default: True)
-    data_source - The data source to pull data from (Default: 'google')
-    indicators - A dictionary of which indicators to plot, where the
-                 keys are strings representing the indicators and the
-                 values indicate the parameters associated with the
-                 indicators.
+    Parameters
+    ----------
+    security : str
+        The ticker symbol
+    col_name : str
+        Open, Close, etc.
+    start_date : str
+        A string representing the start date
+    end_date : str, default None
+        A string indicating the end date of our data. If set to None,
+        then end_date will be set as date.today()
+    show_plot : bool, default True
+        A boolean of whether to plot the security and signals
+    data_source : str, default 'google'
+        The data source to pull data from
+    indicators : dict, default {'ma_crossovers': [5, 10]}
+        a dictionary of which indicators to use, where the keys are
+        strings representing the indicators and the values indicate the
+        parameters associated with the indicators
+        
+        possible keys: 'ma_crossovers', 'rsi', 'bollinger_std', and
+                        'bollinger_len'
+    signals : list, default []
+        A list of signals to plot. Options: 'buy' and 'sell'.
 
-                 Possible keys: 'ma_crossovers', 'rsi', 'bollinger_std',
-                 and 'bollinger_len'
-                 (Default: {})
-    signals - A list of signals to plot. Options: 'buy' and 'sell'.
-              (Default: [])
-
-    Returns:
-    signal_df - A DataFrame of the buy and sell signals
+    Returns
+    -------
+    signal_df : A DataFrame of the buy and sell signals
     """
 
     def _plot_security():
@@ -533,11 +585,15 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
     def _plot_signals(df, type_, colour):
         """Plots buy or sell signals.
 
-        Inputs:
-        df - buy_df or sell_df
-        type_ - 'Sell' or 'Buy'
-        colour - Plotting colour
+        Parameters
+        ----------
+        df : DataFrame
+            buy_df or sell_df
+        type_ : str
+            'Sell' or 'Buy'
+        colour : Plotting colour
         """
+
         for row in df.itertuples():
             if 'ax' in kwargs:
                 ax = kwargs['ax']
@@ -640,6 +696,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
     else:
         return None
 
+
 def plot_trades(sec_port):
     """Plots the trades."""
 
@@ -650,24 +707,30 @@ def plot_trades(sec_port):
         elif row.trans_type == 'Sell':
             plt.axvline(row.date, linestyle='--', linewidth=3, color=green)
 
+
 def plot_rsi(security, col_name, start_date, end_date=None, ndays=14,
              thresholds=[20, 80], **kwargs):
     """Plots a single security.
 
-    Inputs:
-    security - The ticker symbols
-    col_name - Open, Close, etc.
-    start_date - A string representing the start date
-    end_date - A string indicating the end date of our data. If set to
-               None, then end_date will be set as date.today()
-               (Default: None)
-    ndays - The number of days to use as a lookback period (Default: 14)
-    thresholds - The RSI thresholds (Default: [20, 80])
+    Parameters
+    ----------
+    security : str
+        The ticker symbol
+    col_name : str
+        Open, Close, etc.
+    start_date : str
+        A string representing the start date
+    end_date : str, default None
+        A string indicating the end date of our data. If set to None,
+         then end_date will be set as date.today()
+    ndays : int, default 14
+        The number of days to use as a lookback period
+    thresholds : list of int, default [20, 80]
+        The RSI thresholds (Default: [20, 80])
     """
 
     def _rsi_agg(security_array):
         """Returns RSI."""
-        
         # Get differences of the security
         sec_diff = np.diff(security_array)
         pos_array = sec_diff[sec_diff > 0]    
@@ -885,15 +948,24 @@ def pairs_trade(df_1, df_2, column, suffixes, start_date,
                 end_date=date.today(), threshold=2, cash_amt=10000):
     """Run pairs trading model.
     
-    Inputs:
-    df_1 - The first DataFrame of security information
-    df_2 - The second DataFrame of security information
-    column - The column to look at
-    suffixes - The suffixes appended to the columns
-    start_date - When to start training from
-    end_date - When to finish training
-    threshold - The threshold to surpass to trade
-    cash_amt - Starting cash amount
+    Parameters
+    ----------
+    df_1 : DataFrame
+        The first DataFrame of security information
+    df_2 : DataFrame
+        The second DataFrame of security information
+    column : str
+        The column to look at
+    suffixes : list of str
+        The suffixes appended to the columns
+    start_date : str
+        Date indicating when to start trading
+    end_date : str
+        Date indicating when to stop trading
+    threshold : int, default 2
+        The threshold to surpass to trade
+    cash_amt : int, default 10000
+        Starting cash amount
     """
 
     def _get_column_names(column, suffixes):
