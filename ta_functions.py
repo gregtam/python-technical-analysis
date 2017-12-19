@@ -49,7 +49,7 @@ def _trim_security_name(sec_string, sec_name):
 
 
 def generate_bollinger_columns(security_df, securities, col_name,
-                               bollinger_std, bollinger_len):
+                               bollinger_len, bollinger_std):
     """Creates columns for Bollinger bands and buy signals.
 
     Parameters
@@ -60,10 +60,10 @@ def generate_bollinger_columns(security_df, securities, col_name,
         The corresponding list of securities, ETFs, etc.
     col_name : str
         Close, Open, etc.
-    bollinger_std : float
-        The standard deviation of the Bollinger bands
     bollinger_len : int
         The number of days to use for the moving average
+    bollinger_std : float
+        The standard deviation of the Bollinger bands
 
     Returns
     -------
@@ -135,7 +135,7 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
         # Add moving average
         col_name = col_name.lower()
         security = security.lower()
-        input_col = col_name + '_' + security
+        input_col = '{}_{}'.format(col_name, security)
 
         # Create moving average columns
         for n in ndays:
@@ -147,7 +147,7 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
         short_ma = security_df[short_ma_col]
         long_ma = security_df[long_ma_col]
 
-        ma_diff_col_name = 'ma_diff_' + security
+        ma_diff_col_name = 'ma_diff_{}'.format(security)
         security_df[ma_diff_col_name] = short_ma - long_ma
 
         crossover = np.array(security_df[ma_diff_col_name])[:-1]\
@@ -202,6 +202,7 @@ def generate_returns(security_df, col_name):
 
     sec_returns = ((df_col - df_last_col)/df_last_col)
     return sec_returns
+
 
 def get_security_data(securities, start_date, end_date=None,
                       data_source='google'):
@@ -312,6 +313,7 @@ def run_simulation(securities, col_name, start_date, end_date=None,
                              **simulation_args)
     return port
    
+
 def run_simulation_df(security_data, col_name, start_cash_amt=10000,
                       indicators=dict(ma_crossovers=[5, 10]), verbose=True,
                       plot_options=set(['transactions'])):
@@ -328,12 +330,18 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
     start_cash_amt : int, default 10000
         Starting portfolio cash amount
     indicators : dict, default {'ma_crossovers': [5, 10]}
-        a dictionary of which indicators to use, where the keys are
+        A dictionary of which indicators to use, where the keys are
         strings representing the indicators and the values indicate the
         parameters associated with the indicators
         
-        possible keys: 'ma_crossovers', 'rsi', 'bollinger_std', and
-                        'bollinger_len'
+        Possible Keys:
+        bollinger_bands : tuple
+            A 2-tuple representing the length and standard deviation of
+            the bollinger bands
+        ma_crossovers : tuple
+            A 2-tuple of the moving average crossover lengths
+        rsi : tuple
+            A 2-tuple of the RSI thresholds
     verbose : bool, default True
         A boolean of whether to print each trade (Default: True)
     plot_options : set
@@ -418,8 +426,7 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
                                                               purchase_price
                                                              )
 
-                if 'bollinger_len' in indicators\
-                       and 'bollinger_std' in indicators:
+                if 'bollinger_bands' in indicators:
                     purchase_price = _get_bollinger_price(index,
                                                           row,
                                                           security,
@@ -477,12 +484,12 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
                                             col_name,
                                             indicators['ma_crossovers']
                                            )
-    if 'bollinger_std' in indicators and 'bollinger_len' in indicators:
+    if 'bollinger_bands' in indicators:
         security_data = generate_bollinger_columns(security_data,
                                                    securities,
                                                    col_name,
-                                                   indicators['bollinger_std'],
-                                                   indicators['bollinger_len']
+                                                   indicators['bollinger_bands'][0],
+                                                   indicators['bollinger_bands'][1]
                                                   )
 
     sec_port = security_portfolio(start_cash_amt, verbose=verbose)
@@ -515,14 +522,22 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
     data_source : str, default 'google'
         The data source to pull data from
     indicators : dict, default {'ma_crossovers': [5, 10]}
-        a dictionary of which indicators to use, where the keys are
+        A dictionary of which indicators to use, where the keys are
         strings representing the indicators and the values indicate the
         parameters associated with the indicators
         
-        possible keys: 'ma_crossovers', 'rsi', 'bollinger_std', and
-                        'bollinger_len'
+        Possible Keys:
+        bollinger_bands : tuple
+            A 2-tuple representing the length and standard deviation of
+            the bollinger bands
+        ma_crossovers : tuple
+            A 2-tuple of the moving average crossover lengths
+        rsi : tuple
+            A 2-tuple of the RSI thresholds
     signals : list, default []
         A list of signals to plot. Options: 'buy' and 'sell'.
+    data_store : data_store
+    kwargs : Matplotlib keyword arguments
 
     Returns
     -------
@@ -590,7 +605,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
         df : DataFrame
             buy_df or sell_df
         type_ : str
-            'Sell' or 'Buy'
+            'Buy' or 'Sell'
         colour : Plotting colour
         """
 
@@ -630,7 +645,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
 
     security = security.lower()
     col_name = col_name.lower()
-    desired_column = col_name + '_' + security
+    desired_column = '{}_{}'.format(col_name, security)
     bollinger_high_col = '{}_bollinger_high_{}'.format(col_name, security)
     bollinger_low_col = '{}_bollinger_low_{}'.format(col_name, security)
 
@@ -639,9 +654,9 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
     if show_plot:
         _plot_security()
 
-    if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
-        bollinger_len = indicators['bollinger_len']
-        bollinger_std = indicators['bollinger_std']
+    if 'bollinger_bands' in indicators:
+        bollinger_len = indicators['bollinger_bands'][0]
+        bollinger_std = indicators['bollinger_bands'][1]
         security_df = _plot_bollinger_bands(security_df)
 
     if 'ma_crossovers' in indicators:
@@ -660,7 +675,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
             if show_plot:
                 _plot_signals(buy_df, 'Buy', red)
 
-        if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
+        if 'bollinger_bands' in indicators:
             buy_col = 'bollinger_signal_{}'.format(security)
             buy_df = security_df[security_df[buy_col] == 'Buy'].copy()
             signal_df = pd.concat([signal_df, buy_df])
@@ -678,7 +693,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
             if show_plot:
                 _plot_signals(sell_df, 'Sell', green)
 
-        if 'bollinger_len' in indicators and 'bollinger_std' in indicators:
+        if 'bollinger_bands' in indicators:
             sell_col = 'bollinger_signal_{}'.format(security)
             sell_df = security_df[security_df[sell_col] == 'Sell'].copy()
             signal_df = pd.concat([signal_df, sell_df])
@@ -709,7 +724,7 @@ def plot_trades(sec_port):
 
 
 def plot_rsi(security, col_name, start_date, end_date=None, ndays=14,
-             thresholds=[20, 80], **kwargs):
+             thresholds=[20, 80], data_source='google', **kwargs):
     """Plots a single security.
 
     Parameters
@@ -726,7 +741,9 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=14,
     ndays : int, default 14
         The number of days to use as a lookback period
     thresholds : list of int, default [20, 80]
-        The RSI thresholds (Default: [20, 80])
+        The RSI thresholds
+    data_source : str, default 'google'
+        The source of the security data
     """
 
     def _rsi_agg(security_array):
@@ -757,7 +774,8 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=14,
     security = security.lower()
     col_name = col_name.lower()
     desired_column = col_name + '_' + security
-    security_df = get_security_data(security, start_date, end_date)
+    security_df = get_security_data(security, start_date, end_date,
+                                    data_source=data_source)
     security_df['rsi'] = security_df[desired_column]\
         .rolling(ndays)\
         .aggregate(_rsi_agg)
@@ -966,6 +984,10 @@ def pairs_trade(df_1, df_2, column, suffixes, start_date,
         The threshold to surpass to trade
     cash_amt : int, default 10000
         Starting cash amount
+
+    Returns
+    -------
+    join_df : DataFrame
     """
 
     def _get_column_names(column, suffixes):
