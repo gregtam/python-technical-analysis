@@ -720,8 +720,14 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
         if plot_size > 1:
             next_ax = ax[ax_counter]
             ax_counter += 1
-        security_df = plot_bollinger_bands(security_df, col_name, start_date,
-                                           end_date, ax=next_ax)
+        security_df = plot_bollinger_bands(security_df,
+                                           col_name,
+                                           start_date,
+                                           end_date,
+                                           bollinger_len=bollinger_len,
+                                           bollinger_std=bollinger_std,
+                                           ax=next_ax
+                                          )
 
         signal_col = 'bollinger_signal_{}'.format(security)
         _plot_signals(security_df, signal_col, ax)
@@ -732,8 +738,13 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
         if plot_size > 1:
             next_ax = ax[ax_counter]
             ax_counter += 1
-        security_df = plot_ma_crossovers(security_df, col_name, start_date,
-                                         end_date, ax=next_ax)
+        security_df = plot_ma_crossovers(security_df,
+                                         col_name,
+                                         start_date,
+                                         end_date,
+                                         ndays=ndays,
+                                         ax=next_ax
+                                        )
 
     if 'rsi' in indicators:
         ndays = indicators['rsi'][0]
