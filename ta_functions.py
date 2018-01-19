@@ -228,7 +228,7 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
         # Make a new variable signal_SECURITY which determines, based
         # off the moving average, whether to buy, sell or do nothing. We
         # buy when short_ma is larger than long_ma
-        signal_col_name = 'crossover_signal_{}'.format(security)
+        signal_col_name = 'ma_crossover_signal_{}'.format(security)
         signal_cols = [crossover_col_name, short_ma_col_name, long_ma_col_name]
 
         security_df[signal_col_name] = security_df[signal_cols]\
@@ -310,13 +310,13 @@ def generate_rsi_columns(security, col_name, start_date, end_date, ndays,
         security_name = _get_security_names(security)
 
     desired_column = '{}_{}'.format(col_name, security_name)
-    signal_col = 'rsi_signal_{}'.format(security_name)
+    signal_col_name = 'rsi_signal_{}'.format(security_name)
 
     security_df['rsi'] = security_df[desired_column]\
         .rolling(ndays)\
         .aggregate(_rsi_agg)
 
-    security_df[signal_col] = security_df.rsi\
+    security_df[signal_col_name] = security_df.rsi\
         .map(lambda s: _get_rsi_signals(s, thresholds))
 
     return security_df
@@ -729,8 +729,16 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
                                            ax=next_ax
                                           )
 
-        signal_col = 'bollinger_signal_{}'.format(security)
-        _plot_signals(security_df, signal_col, ax)
+        signal_col_name = 'bollinger_signal_{}'.format(security)
+        _plot_signals(security_df, signal_col_name, ax)
+
+    if 'ewma_crossovers' in indicators:
+        indicators['ewma_crossovers']
+
+        if plot_size > 1:
+            next_ax = ax[ax_counter]
+            ax_counter += 1
+
 
     if 'ma_crossovers' in indicators:
         ndays = indicators['ma_crossovers']
@@ -817,27 +825,103 @@ def plot_bollinger_bands(security, col_name, start_date, end_date=None,
                                              bollinger_std=bollinger_std
                                             )
 
-    price_col = '{}_{}'.format(col_name, security_name)
+    price_col_name = '{}_{}'.format(col_name, security_name)
     bollinger_high_col = '{}_bollinger_high_{}'.format(col_name, security_name)
     bollinger_low_col = '{}_bollinger_low_{}'.format(col_name, security_name)
-    signal_col = 'bollinger_signal_{}'.format(security_name)
+    signal_col_name = 'bollinger_signal_{}'.format(security_name)
 
     # Plot the upper and lower bollinger bands
     if 'ax' in kwargs:
         ax = kwargs['ax']
         ax.plot(security_df.index, security_df[bollinger_high_col],
                 c=black, linestyle='--', alpha=0.5)
-        ax.plot(security_df.index, security_df[price_col], c=black)
+        ax.plot(security_df.index, security_df[price_col_name], c=black)
         ax.plot(security_df.index, security_df[bollinger_low_col],
                 c=black, linestyle='--', alpha=0.5)
-        _plot_signals(security_df, signal_col, ax)
+        _plot_signals(security_df, signal_col_name, ax)
     else:
         plt.figure(figsize=plot_dim)
         plt.plot(security_df.index, security_df[bollinger_high_col],
                  c=black, linestyle='--', alpha=0.5)
-        plt.plot(security_df.index, security_df[price_col], c=black)
+        plt.plot(security_df.index, security_df[price_col_name], c=black)
         plt.plot(security_df.index, security_df[bollinger_low_col],
                  c=black, linestyle='--', alpha=0.5)
+        _plot_signals(security_df, signal_col_name)
+
+    return security_df
+
+
+def plot_ewma_crossovers(security, col_name, start_date, end_date=None,
+                         com=None, span=None, halflife=None, alpha=None,
+                         plot_dim=(12, 8), data_source='google', **kwargs):
+    """Plots a security and its exponentially weighted moving averages.
+
+    Parameters
+    ----------
+    security : str or DataFrame
+        The ticker symbol or a DataFrame containing the daily price
+        information
+    col_name : str
+        Open, Close, etc.
+    start_date : str
+        A string representing the start date. If security is a
+        DataFrame, then start_date should be None.
+    end_date : str, default None
+        A string indicating the end date of our data. If set to None,
+        then end_date will be set as date.today()
+    com : float, default None
+        Decay in terms of center of mass
+    span : float, default None
+        Decay in terms of span
+    halflife : float, default None
+        Decay in terms of halflife
+    alpha : float, default None
+        Smoothing factor
+    plot_dim : tuple, default (12, 8)
+        The dimensions of the plot
+    data_source : str, default 'google'
+        The source of the security data
+    kwargs : Matplotlib keyword arguments
+    """
+
+    if isinstance(security, str):
+        security = security.lower()
+        col_name = col_name.lower()
+        security_df = get_security_data(security, start_date, end_date,
+                                        data_source=data_source)
+        security_name = security
+    elif isinstance(security, pd.DataFrame):
+        security_df = security.copy()
+        security_name = _get_security_names(security)
+
+    security_df = generate_ma_columns(security_df, security_name, col_name,
+                                      ndays=ndays)
+    price_col_name = '{}_{}'.format(col_name, security_name)
+    signal_col_name = 'ewma_crossover_signal_{}'.format(security_name)
+
+    # Take the first and fourth blue colours so they are not too similar
+    ma_blues = [blues[0], blues[3]]
+
+    if 'ax' in kwargs:
+        ax = kwargs['ax']
+        ax.plot(security_df.index, security_df[price_col_name],
+                c=black)
+
+        for colour, nday in izip(ma_blues, ndays):
+            ma_crossover_col = '{}_{}d_ma_{}'\
+                .format(col_name, nday, security_name)
+            ax.plot(security_df.index, security_df[ma_crossover_col],
+                    c=colour, alpha=0.8)
+        _plot_signals(security_df, signal_col_name, ax)
+    else:
+        plt.figure(figsize=plot_dim)
+        plt.plot(security_df.index, security_df[price_col_name],
+                 c=black)
+        for colour, nday in izip(ma_blues, ndays):
+            ma_crossover_col = '{}_{}d_ma_{}'\
+                .format(col_name, nday, security_name)
+            plt.plot(security_df.index, security_df[ma_crossover_col],
+                     c=colour, alpha=0.8)
         _plot_signals(security_df, signal_col)
 
     return security_df
@@ -882,15 +966,15 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
 
     security_df = generate_ma_columns(security_df, security_name, col_name,
                                       ndays=ndays)
-    price_col = '{}_{}'.format(col_name, security_name)
-    signal_col = 'crossover_signal_{}'.format(security_name)
+    price_col_name = '{}_{}'.format(col_name, security_name)
+    signal_col_name = 'ma_crossover_signal_{}'.format(security_name)
 
     # Take the first and fourth blue colours so they are not too similar
     ma_blues = [blues[0], blues[3]]
 
     if 'ax' in kwargs:
         ax = kwargs['ax']
-        ax.plot(security_df.index, security_df[price_col],
+        ax.plot(security_df.index, security_df[price_col_name],
                 c=black)
 
         for colour, nday in izip(ma_blues, ndays):
@@ -898,17 +982,17 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
                 .format(col_name, nday, security_name)
             ax.plot(security_df.index, security_df[ma_crossover_col],
                     c=colour, alpha=0.8)
-        _plot_signals(security_df, signal_col, ax)
+        _plot_signals(security_df, signal_col_name, ax)
     else:
         plt.figure(figsize=plot_dim)
-        plt.plot(security_df.index, security_df[price_col],
+        plt.plot(security_df.index, security_df[price_col_name],
                  c=black)
         for colour, nday in izip(ma_blues, ndays):
             ma_crossover_col = '{}_{}d_ma_{}'\
                 .format(col_name, nday, security_name)
             plt.plot(security_df.index, security_df[ma_crossover_col],
                      c=colour, alpha=0.8)
-        _plot_signals(security_df, signal_col)
+        _plot_signals(security_df, signal_col_name)
 
     return security_df
 
@@ -951,7 +1035,7 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
     elif isinstance(security, pd.DataFrame):
         security_name = _get_security_names(security)
 
-    signal_col = 'rsi_signal_{}'.format(security_name)
+    signal_col_name = 'rsi_signal_{}'.format(security_name)
     security_df = generate_rsi_columns(security, col_name, start_date,
                                        end_date, ndays, thresholds,
                                        data_source)
@@ -962,7 +1046,7 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
         ax.axhline(y=thresholds[0], linestyle='--', c=black, alpha=0.5)
         ax.axhline(y=thresholds[1], linestyle='--', c=black, alpha=0.5)
 
-        _plot_signals(security_df, signal_col, ax)
+        _plot_signals(security_df, signal_col_name, ax)
         ax.set_ylim(0, 100)
     else:
         plt.figure(figsize=(12, 8))
@@ -970,7 +1054,7 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
         plt.axhline(y=thresholds[0], linestyle='--', c=black, alpha=0.5)
         plt.axhline(y=thresholds[1], linestyle='--', c=black, alpha=0.5)
 
-        _plot_signals(security_df, signal_col)
+        _plot_signals(security_df, signal_col_name)
         plt.ylim(0, 100)
 
     return security_df
