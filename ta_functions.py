@@ -105,7 +105,8 @@ def generate_bollinger_columns(security_df, securities, col_name,
 
     Returns
     -------
-    A Pandas DataFrame with the new Bollinger columns
+    security_df : DataFrame
+        DataFrame with the new Bollinger columns
     """
 
     def _get_buy_sell_str(buy, sell):
@@ -118,20 +119,19 @@ def generate_bollinger_columns(security_df, securities, col_name,
             return 'N/A'
 
     security_df = security_df.copy()
-
     securities = _listify_security(securities)
 
     for security in securities:
         col_name = col_name.lower()
         security = security.lower()
-        input_col = '{}_{}'.format(col_name, security)
+        desired_col = '{}_{}'.format(col_name, security)
 
         # Set column names for bollinger bands
         bollinger_high = '{}_bollinger_high_{}'.format(col_name, security)
         bollinger_low = '{}_bollinger_low_{}'.format(col_name, security)
 
         # Get rolling mean and standard deviation
-        rolling_window = security_df[input_col].rolling(bollinger_len)
+        rolling_window = security_df[desired_col].rolling(bollinger_len)
         rolling_mean = rolling_window.mean()
         rolling_std = rolling_window.std()
 
@@ -140,8 +140,8 @@ def generate_bollinger_columns(security_df, securities, col_name,
         security_df[bollinger_low] = rolling_mean - bollinger_std * rolling_std
 
         # Buy and sell signal series
-        buy_signal = (security_df[input_col] < security_df[bollinger_low])
-        sell_signal = (security_df[input_col] > security_df[bollinger_high])
+        buy_signal = (security_df[desired_col] < security_df[bollinger_low])
+        sell_signal = (security_df[desired_col] > security_df[bollinger_high])
 
         signal_col_name = 'bollinger_signal_{}'.format(security)
 
@@ -169,7 +169,8 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
 
     Returns
     -------
-    A Pandas DataFrame with the new MA columns
+    security_df : DataFrame
+        DataFrame with the new moving average columns
     """
 
     def _is_crossover(x):
@@ -198,12 +199,12 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
     for security in securities:
         # Add moving average
         security = security.lower()
-        input_col = '{}_{}'.format(col_name, security)
+        desired_col = '{}_{}'.format(col_name, security)
 
         # Create moving average columns
         for n in ndays:
-            final_col = '{}_{}d_ma_{}'.format(col_name, n, security)
-            security_df[final_col] = security_df[input_col].rolling(n).mean()
+            ma_col = '{}_{}d_ma_{}'.format(col_name, n, security)
+            security_df[ma_col] = security_df[desired_col].rolling(n).mean()
 
         short_ma_col_name = '{}_{}d_ma_{}'.format(col_name, ndays[0], security)
         long_ma_col_name = '{}_{}d_ma_{}'.format(col_name, ndays[1], security)
@@ -237,37 +238,61 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
     return security_df
 
 
-def generate_returns(security_df, col_name):
+def generate_returns(security_df, securities, col_name):
     """Generates the returns of a given security.
 
     Parameters
     ----------
-    security_df : A Pandas DataFrame with the security information.
-    col_name : The column name to generate returns for
+    security_df : DataFrame
+        The merged DataFrame of security data
+    securities : list
+        The corresponding list of securities, ETFs, etc.
+    col_name : str
+        Close, Open, etc.
 
     Returns
     -------
-    sec_returns : A Pandas Series of the returns of the given column
+    security_df : DataFrame
+        DataFrame with the returns columns
     """
 
     # Get the first security name
-    security_names = _get_security_names(security_df)
-    if len(security_names) > 1:
-        raise(Exception('There can only be one security in the DataFrame'))
-    else:
-        security_name = list(security_names)[0]
+    col_name = col_name.lower()
+    securities = _listify_security(securities)
 
-    col_name = col_name + '_' + security_name
-    df_col = security_df[col_name]
-    df_last_col = df_col.shift(1)
+    for security in securities:
+        security = security.lower()
+        desired_column = '{}_{}'.format(col_name, security)
+        df_col = security_df[desired_column]
+        df_last_col = df_col.shift(1)
 
-    sec_returns = ((df_col - df_last_col)/df_last_col)
-    return sec_returns
+        returns_col_name = 'returns_{}'.format(security)
+        security_df[returns_col_name] = ((df_col - df_last_col)/df_last_col)
+
+    return security_df
 
 
-def generate_rsi_columns(security, col_name, start_date, end_date, ndays,
-                          thresholds, data_source):
-    """Returns a DataFrame with the computed RSI."""
+def generate_rsi_columns(security_df, securities, col_name, ndays, thresholds):
+    """Returns a DataFrame with the computed RSI.
+
+    Parameters
+    ----------
+    security_df : DataFrame
+        The merged DataFrame of security data
+    securities : list
+        The corresponding list of securities, ETFs, etc.
+    col_name : str
+        Close, Open, etc.
+    ndays : int
+        The number of days to use for computing the RSI
+    thresholds : list
+        List of integers representing the RSI thresholds
+
+    Returns
+    -------
+    security_df : DataFrame
+        DataFrame with the new moving average columns
+    """
 
     def _get_rsi_signals(rsi_val, thresholds):
         """Returns the RSI Buy and Sell signals based off thresholds."""
@@ -300,24 +325,22 @@ def generate_rsi_columns(security, col_name, start_date, end_date, ndays,
             rsi = 100 - 100/(1 + float(pos_mean)/float(neg_mean))
         return rsi
 
-    if isinstance(security, str):
-        col_name = col_name.lower()
-        security_df = get_security_data(security, start_date, end_date,
-                                        data_source=data_source)
-        security_name = security.lower()
-    elif isinstance(security, pd.DataFrame):
-        security_df = security.copy()
-        security_name = _get_security_names(security)
+    col_name = col_name.lower()
+    securities = _listify_security(securities)
+    security_df = security_df.copy()
 
-    desired_column = '{}_{}'.format(col_name, security_name)
-    signal_col_name = 'rsi_signal_{}'.format(security_name)
+    for security in securities:
+        security = security.lower()
+        desired_column = '{}_{}'.format(col_name, security)
+        rsi_col_name = 'rsi_{}'.format(security)
+        signal_col_name = 'rsi_signal_{}'.format(security)
 
-    security_df['rsi'] = security_df[desired_column]\
-        .rolling(ndays)\
-        .aggregate(_rsi_agg)
+        security_df[rsi_col_name] = security_df[desired_column]\
+            .rolling(ndays)\
+            .aggregate(_rsi_agg)
 
-    security_df[signal_col_name] = security_df.rsi\
-        .map(lambda s: _get_rsi_signals(s, thresholds))
+        security_df[signal_col_name] = security_df[rsi_col_name]\
+            .map(lambda s: _get_rsi_signals(s, thresholds))
 
     return security_df
 
@@ -337,6 +360,11 @@ def get_security_data(securities, start_date, end_date=None,
         then end_date will be set as date.today()
     data_source : str, default 'google'
         The source of the security data
+
+    Returns
+    -------
+    security_df : DataFrame
+        DataFrame with all security data
     """
 
     securities = _listify_security(securities)
@@ -358,11 +386,11 @@ def get_security_data(securities, start_date, end_date=None,
         df.columns = ['{}_{}'.format(col, security).lower()
                           for col in df.columns]
 
-    merged_df = df_list[0].copy()
+    security_df = df_list[0].copy()
     for i in range(1, len(df_list)):
-        merged_df = merged_df.join(df_list[i])
+        security_df = security_df.join(df_list[i])
 
-    return merged_df
+    return security_df
 
 
 def run_simulation(securities, col_name, start_date, end_date=None,
@@ -808,15 +836,16 @@ def plot_bollinger_bands(security, col_name, start_date, end_date=None,
     kwargs : Matplotlib keyword arguments
     """
 
+    if not isinstance(security, (str, pd.DataFrame)):
+        raise ValueError('security must be str or DataFrame.')
     if isinstance(security, str):
-        security = security.lower()
-        col_name = col_name.lower()
-        security_df = get_security_data(security, start_date, end_date,
+        security_name = security.lower()
+        security_df = get_security_data(security_name, start_date, end_date,
                                         data_source=data_source)
-        security_name = security
     elif isinstance(security, pd.DataFrame):
-        security_df = security.copy()
         security_name = _get_security_names(security)
+        security_df = security.copy()
+    col_name = col_name.lower()
 
     security_df = generate_bollinger_columns(security_df,
                                              security_name,
@@ -884,15 +913,16 @@ def plot_ewma_crossovers(security, col_name, start_date, end_date=None,
     kwargs : Matplotlib keyword arguments
     """
 
+    if not isinstance(security, (str, pd.DataFrame)):
+        raise ValueError('security must be str or DataFrame.')
     if isinstance(security, str):
-        security = security.lower()
-        col_name = col_name.lower()
-        security_df = get_security_data(security, start_date, end_date,
+        security_name = security.lower()
+        security_df = get_security_data(security_name, start_date, end_date,
                                         data_source=data_source)
-        security_name = security
     elif isinstance(security, pd.DataFrame):
-        security_df = security.copy()
         security_name = _get_security_names(security)
+        security_df = security.copy()
+    col_name = col_name.lower()
 
     security_df = generate_ma_columns(security_df, security_name, col_name,
                                       ndays=ndays)
@@ -954,15 +984,16 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
     kwargs : Matplotlib keyword arguments
     """
 
+    if not isinstance(security, (str, pd.DataFrame)):
+        raise ValueError('security must be str or DataFrame.')
     if isinstance(security, str):
-        security = security.lower()
-        col_name = col_name.lower()
-        security_df = get_security_data(security, start_date, end_date,
+        security_name = security.lower()
+        security_df = get_security_data(security_name, start_date, end_date,
                                         data_source=data_source)
-        security_name = security
     elif isinstance(security, pd.DataFrame):
-        security_df = security.copy()
         security_name = _get_security_names(security)
+        security_df = security.copy()
+    col_name = col_name.lower()
 
     security_df = generate_ma_columns(security_df, security_name, col_name,
                                       ndays=ndays)
@@ -997,6 +1028,54 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
     return security_df
 
 
+def plot_returns(security, col_name, start_date, end_date=None,
+                 data_source='google', **kwargs):
+    """Plots the daily returns of a security.
+
+    Parameters
+    ----------
+    security : str or DataFrame
+        The ticker symbol or a DataFrame containing the daily price
+        information
+    col_name : str
+        Open, Close, etc.
+    start_date : str
+        A string representing the start date
+    end_date : str, default None
+        A string indicating the end date of our data. If set to None,
+        then end_date will be set as date.today()
+    data_source : str, default 'google'
+        The source of the security data
+    kwargs : Matplotlib keyword arguments
+    """
+
+    if end_date is None:
+        end_date = date.today()
+
+    if not isinstance(security, (str, pd.DataFrame)):
+        raise ValueError('security must be str or DataFrame.')
+    if isinstance(security, str):
+        security_name = security.lower()
+        security_df = get_security_data(security_name, start_date, end_date,
+                                        data_source=data_source)
+    elif isinstance(security, pd.DataFrame):
+        security_name = _get_security_names(security)
+        security_df = security.copy()
+    col_name = col_name.lower()
+
+    security_df = generate_returns(security_df, security_name, col_name)
+
+    returns_col_name = 'returns_{}'.format(security_name)
+
+    if 'ax' in kwargs:
+        ax = kwargs['ax']
+        ax.plot(security_df.index, security_df[returns_col_name])
+    else:
+        plt.plot(security_df.index, security_df[returns_col_name])
+
+    return security_df
+
+
 def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
              thresholds=[20, 80], plot_dim=(12, 8), data_source='google',
              **kwargs):
@@ -1013,7 +1092,7 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
         A string representing the start date
     end_date : str, default None
         A string indicating the end date of our data. If set to None,
-         then end_date will be set as date.today()
+        then end_date will be set as date.today()
     ndays : int, default 15
         The number of days to use as a lookback period
     thresholds : list of int, default [20, 80]
@@ -1032,17 +1111,22 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
         raise ValueError('security must be str or DataFrame.')
     if isinstance(security, str):
         security_name = security.lower()
+        security_df = get_security_data(security_name, start_date, end_date,
+                                        data_source=data_source)
     elif isinstance(security, pd.DataFrame):
         security_name = _get_security_names(security)
+        security_df = security.copy()
+    col_name = col_name.lower()
 
     signal_col_name = 'rsi_signal_{}'.format(security_name)
-    security_df = generate_rsi_columns(security, col_name, start_date,
-                                       end_date, ndays, thresholds,
-                                       data_source)
+    security_df = generate_rsi_columns(security_df, security_name, col_name,
+                                       ndays, thresholds)
+
+    rsi_col_name = 'rsi_{}'.format(security_name)
 
     if 'ax' in kwargs:
         ax = kwargs['ax']
-        ax.plot(security_df.index, security_df.rsi, c=black)
+        ax.plot(security_df.index, security_df[rsi_col_name], c=black)
         ax.axhline(y=thresholds[0], linestyle='--', c=black, alpha=0.5)
         ax.axhline(y=thresholds[1], linestyle='--', c=black, alpha=0.5)
 
@@ -1050,7 +1134,7 @@ def plot_rsi(security, col_name, start_date, end_date=None, ndays=15,
         ax.set_ylim(0, 100)
     else:
         plt.figure(figsize=(12, 8))
-        plt.plot(security_df.index, security_df.rsi, c=black)
+        plt.plot(security_df.index, security_df[rsi_col_name], c=black)
         plt.axhline(y=thresholds[0], linestyle='--', c=black, alpha=0.5)
         plt.axhline(y=thresholds[1], linestyle='--', c=black, alpha=0.5)
 
