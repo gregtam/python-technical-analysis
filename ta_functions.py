@@ -4,16 +4,20 @@ from itertools import izip
 from textwrap import dedent
 
 from IPython.core.display import display
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from mpl_finance import candlestick_ohlc
 import numpy as np
 import pandas as pd
 from pandas_datareader import data
 import seaborn as sns
 
+
 blue, green, red, purple, yellow, teal = sns.color_palette('colorblind')
 black = (0, 0, 0)
 white = (1, 1, 1)
 blues = sns.color_palette('Blues', n_colors=6)[::-1]
+
 
 
 def _listify_security(securities):
@@ -77,7 +81,7 @@ def _trim_security_name(sec_string, sec_name):
     underscore ahead of it."""
 
     last_index = sec_string.rfind('_' + sec_name)
-    
+
     # Determines whether sec_name is truly at the end of the string
     # Adds 1 to take into account the '_'
     if last_index + len(sec_name) + 1 == len(sec_string):
@@ -234,7 +238,7 @@ def generate_ma_columns(security_df, securities, col_name, ndays):
 
         security_df[signal_col_name] = security_df[signal_cols]\
             .apply(lambda srs: _get_signal(srs, *signal_cols), axis=1)
-    
+
     return security_df
 
 
@@ -458,7 +462,7 @@ def run_simulation(securities, col_name, start_date, end_date=None,
     port = run_simulation_df(security_data, col_name, start_cash_amt,
                              **simulation_args)
     return port
-   
+
 
 def run_simulation_df(security_data, col_name, start_cash_amt=10000,
                       indicators=dict(ma_crossovers=[5, 10]), verbose=True,
@@ -479,7 +483,7 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
         A dictionary of which indicators to use, where the keys are
         strings representing the indicators and the values indicate the
         parameters associated with the indicators
-        
+
         Possible Keys:
         bollinger_bands : tuple
             A 2-tuple representing the length and standard deviation of
@@ -669,7 +673,7 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
         A dictionary of which indicators to use, where the keys are
         strings representing the indicators and the values indicate the
         parameters associated with the indicators
-        
+
         Possible Keys:
         bollinger_bands : tuple
             A 2-tuple representing the length and standard deviation of
@@ -808,7 +812,8 @@ def plot_trades(sec_port):
 
 def plot_bollinger_bands(security, col_name, start_date, end_date=None,
                          bollinger_len=15, bollinger_std=2.0,
-                         plot_dim=(12, 8), data_source='google',
+                         candlesticks=False, sec_colour=black,
+                         plot_dim=(12, 8), ax=None, data_source='google',
                          **kwargs):
     """Plots a security and its bollinger bands.
 
@@ -829,8 +834,13 @@ def plot_bollinger_bands(security, col_name, start_date, end_date=None,
         The number of days to use as a lookback period
     bollinger_std : float, default 2.0
         The standard deviation of the bollinger band
+    candlesticks : bool, default False
+        Whether to plot candlesticks
+    sec_colour : 3-tuple, default black
+        The colour of the security price line
     plot_dim : tuple, default (12, 8)
         The dimensions of the plot
+    ax : Matplotlib Axes
     data_source : str, default 'google'
         The source of the security data
     kwargs : Matplotlib keyword arguments
@@ -847,6 +857,9 @@ def plot_bollinger_bands(security, col_name, start_date, end_date=None,
         security_df = security.copy()
     col_name = col_name.lower()
 
+    if candlesticks and ax is None:
+        raise ValueError('If candlesticks is True, then ax must be specified.')
+
     security_df = generate_bollinger_columns(security_df,
                                              security_name,
                                              col_name,
@@ -860,19 +873,31 @@ def plot_bollinger_bands(security, col_name, start_date, end_date=None,
     signal_col_name = 'bollinger_signal_{}'.format(security_name)
 
     # Plot the upper and lower bollinger bands
-    if 'ax' in kwargs:
-        ax = kwargs['ax']
+    if ax is not None:
+        if candlesticks:
+            plot_candlesticks(security_df, ax, **kwargs)
+        else:
+            if 'c' in kwargs:
+                ax.plot(security_df.index, security_df[price_col_name],
+                        **kwargs)
+            else:
+                ax.plot(security_df.index, security_df[price_col_name],
+                        c=black, **kwargs)
+
         ax.plot(security_df.index, security_df[bollinger_high_col],
                 c=black, linestyle='--', alpha=0.5)
-        ax.plot(security_df.index, security_df[price_col_name], c=black)
         ax.plot(security_df.index, security_df[bollinger_low_col],
                 c=black, linestyle='--', alpha=0.5)
         _plot_signals(security_df, signal_col_name, ax)
     else:
         plt.figure(figsize=plot_dim)
+        if 'c' in kwargs:
+            plt.plot(security_df.index, security_df[price_col_name], **kwargs)
+        else:
+            plt.plot(security_df.index, security_df[price_col_name], c=black,
+                     **kwargs)
         plt.plot(security_df.index, security_df[bollinger_high_col],
                  c=black, linestyle='--', alpha=0.5)
-        plt.plot(security_df.index, security_df[price_col_name], c=black)
         plt.plot(security_df.index, security_df[bollinger_low_col],
                  c=black, linestyle='--', alpha=0.5)
         _plot_signals(security_df, signal_col_name)
@@ -958,7 +983,8 @@ def plot_ewma_crossovers(security, col_name, start_date, end_date=None,
 
 
 def plot_ma_crossovers(security, col_name, start_date, end_date=None,
-                       ndays=[5, 15], plot_dim=(12, 8), data_source='google',
+                       ndays=[5, 15], candlesticks=False, sec_colour=black,
+                       plot_dim=(12, 8), ax=None, data_source='google',
                        **kwargs):
     """Plots a security and its moving averages.
 
@@ -977,8 +1003,13 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
         then end_date will be set as date.today()
     ndays : tuple
         A 2-tuple of the moving average crossover lengths
+    candlesticks : bool, default False
+        Whether to plot candlesticks
+    sec_colour : 3-tuple, default black
+        The colour of the security price line
     plot_dim : tuple, default (12, 8)
         The dimensions of the plot
+    ax : Matplotlib Axes
     data_source : str, default 'google'
         The source of the security data
     kwargs : Matplotlib keyword arguments
@@ -995,6 +1026,9 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
         security_df = security.copy()
     col_name = col_name.lower()
 
+    if candlesticks and ax is None:
+        raise ValueError('If candlesticks is True, then ax must be specified.')
+
     security_df = generate_ma_columns(security_df, security_name, col_name,
                                       ndays=ndays)
     price_col_name = '{}_{}'.format(col_name, security_name)
@@ -1003,10 +1037,16 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
     # Take the first and fourth blue colours so they are not too similar
     ma_blues = [blues[0], blues[3]]
 
-    if 'ax' in kwargs:
-        ax = kwargs['ax']
-        ax.plot(security_df.index, security_df[price_col_name],
-                c=black)
+    if ax is not None:
+        if candlesticks:
+            plot_candlesticks(security_df, ax, **kwargs)
+        else:
+            if 'c' in kwargs:
+                ax.plot(security_df.index, security_df[price_col_name],
+                        **kwargs)
+            else:
+                ax.plot(security_df.index, security_df[price_col_name],
+                        c=black, **kwargs)
 
         for colour, nday in izip(ma_blues, ndays):
             ma_crossover_col = '{}_{}d_ma_{}'\
@@ -1026,6 +1066,35 @@ def plot_ma_crossovers(security, col_name, start_date, end_date=None,
         _plot_signals(security_df, signal_col_name)
 
     return security_df
+
+
+def plot_candlesticks(security_df, ax, width=0.2, colour_up=green,
+                      colour_down=red, alpha=1.0):
+    """Plots the candlestick of a security with the proper date x-axis.
+
+    Parameters
+    ----------
+    security_df : DataFrame
+        DataFrame of a single security
+    ax : Matplotlib Axes
+    width : float, default 0.2
+        Candlestick width
+    colour_up : 3-tuple, default green
+        The colour of up candles
+    colour_down : 3-tuple, default red
+        The colour of down candles
+    alpha : float, default 1.0
+        Transparency of the candles
+    """
+
+    # Select date and open, high, low, and close columns
+    candlestick_df = security_df.reset_index().iloc[:, :5]
+    candlestick_df['Date'] = candlestick_df['Date'].map(mdates.date2num)
+    quotes = np.array(candlestick_df)
+
+    candlestick_ohlc(ax, quotes, width, colorup=colour_up,
+                     colordown=colour_down, alpha=alpha)
+    ax.xaxis_date()
 
 
 def plot_returns(security, col_name, start_date, end_date=None,
@@ -1153,7 +1222,7 @@ class data_storage:
         """Obtains security data and stores it into dictionary."""
         if end_date is None:
             end_date = date.today()
-        
+
         security_df = get_security_data(security, start_date, end_date,
                                         data_source)
         self.data_store_dict[security] = security_df
@@ -1185,7 +1254,7 @@ class security_portfolio:
         self.trans_df = pd.DataFrame(columns=['date', 'security', 'trans_type',
                                               'security_price', 'amt',
                                               'total_cash_amt'])
-            
+
     def buy_max_securities(self, ticker_symbol, security_price, trans_date):
         """Buy as many securities as possible with current cash."""
         amount = int(np.floor(self.total_cash_amt/security_price))
@@ -1199,25 +1268,25 @@ class security_portfolio:
                 self.security_dict[ticker_symbol] += amount
             else:
                 self.security_dict[ticker_symbol] = amount
-                
+
             # Decrease total cash amount
             start_cash_amt = self.total_cash_amt
             self.total_cash_amt -= amount * security_price
             added_row = [trans_date, ticker_symbol, 'Buy', security_price,
                          security_price * amount, self.total_cash_amt]
             self.trans_df.loc[self.trans_df.shape[0]] = added_row
-            
+
             if self.verbose:
                 print 'Bought {} shares of {} at {}.\n\tStart cash: {}.\n\tRemaining cash: {}.\n\tDate: {}'\
                       .format(amount, ticker_symbol, security_price,
                               start_cash_amt, self.total_cash_amt, trans_date)
         else:
             raise Exception('You do not own enough cash to purchase this many securities.')
-        
+
     def get_total_cash_amt(self):
         """Shows the total cash amount."""
         return self.total_cash_amt
-            
+
     def sell_securities(self, ticker_symbol, amount, security_price, trans_date):
         if ticker_symbol in self.security_dict:
             num_of_security = self.security_dict[ticker_symbol]
@@ -1238,7 +1307,7 @@ class security_portfolio:
                           .format(amount, ticker_symbol, security_price, start_cash_amt, self.total_cash_amt, trans_date)
         else:
             raise Exception('You do not own shares in this security.')
-            
+
     def sell_all_securities(self, ticker_symbol, security_price, trans_date):
         """Sell all of a given security."""
         if ticker_symbol in self.security_dict:
@@ -1247,11 +1316,11 @@ class security_portfolio:
                                  trans_date)
         else:
             raise Exception('You do not own shares in this security.')
-            
+
     def show_portfolio(self):
         print 'Total Cash Amount: {}'.format(self.total_cash_amt)
         return self.security_dict
-        
+
     def get_all_transactions(self):
         """Returns a Pandas DataFrame of all transactions."""
         return self.trans_df
@@ -1318,7 +1387,7 @@ class security_portfolio:
 def pairs_trade(df_1, df_2, column, suffixes, start_date,
                 end_date=date.today(), threshold=2, cash_amt=10000):
     """Run pairs trading model.
-    
+
     Parameters
     ----------
     df_1 : DataFrame
