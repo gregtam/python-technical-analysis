@@ -652,7 +652,8 @@ def run_simulation_df(security_data, col_name, start_cash_amt=10000,
 
 def get_buy_sell_signals(security, col_name, start_date, end_date=None,
                          show_plot=True, indicators={'ma_crossovers': [5, 10]},
-                         signals=[], plot_dim=(12, 8), data_source='google',
+                         signals=[], candlesticks=False, sec_colour=False,
+                         plot_dim=(12, 8), data_source='google',
                          data_store=None, **kwargs):
     """Gets buy and sell signals given indicators and plots them.
 
@@ -685,6 +686,10 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
             RSI thresholds
     signals : list, default []
         A list of signals to plot. Options: 'buy' and 'sell'.
+    candlesticks : bool, default False
+        Whether to plot candlesticks
+    sec_colour : 3-tuple, default black
+        The colour of the security price line
     plot_dim : tuple, default (12, 8)
         The dimensions of the plot
     data_source : str, default 'google'
@@ -758,6 +763,8 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
                                            end_date,
                                            bollinger_len=bollinger_len,
                                            bollinger_std=bollinger_std,
+                                           candlesticks=candlesticks,
+                                           sec_colour=sec_colour,
                                            ax=next_ax
                                           )
 
@@ -783,6 +790,8 @@ def get_buy_sell_signals(security, col_name, start_date, end_date=None,
                                          start_date,
                                          end_date,
                                          ndays=ndays,
+                                         candlesticks=candlesticks,
+                                         sec_colour=sec_colour,
                                          ax=next_ax
                                         )
 
